@@ -18,6 +18,10 @@ export async function createCheckoutSession({
   team: Team | null;
   priceId: string;
 }) {
+  if (!priceId) {
+    redirect('/pricing');
+  }
+
   const user = await getUser();
 
   if (!team || !user) {
@@ -47,7 +51,7 @@ export async function createCheckoutSession({
 }
 
 export async function createCustomerPortalSession(team: Team) {
-  if (!team.stripeCustomerId || !team.stripeProductId) {
+  if (!team.stripeCustomerId) {
     redirect('/pricing');
   }
 
@@ -57,19 +61,6 @@ export async function createCustomerPortalSession(team: Team) {
   if (configurations.data.length > 0) {
     configuration = configurations.data[0];
   } else {
-    const product = await stripe.products.retrieve(team.stripeProductId);
-    if (!product.active) {
-      throw new Error("Team's product is not active in Stripe");
-    }
-
-    const prices = await stripe.prices.list({
-      product: product.id,
-      active: true
-    });
-    if (prices.data.length === 0) {
-      throw new Error("No active prices found for the team's product");
-    }
-
     configuration = await stripe.billingPortal.configurations.create({
       business_profile: {
         headline: 'Manage your subscription'
@@ -78,13 +69,7 @@ export async function createCustomerPortalSession(team: Team) {
         subscription_update: {
           enabled: true,
           default_allowed_updates: ['price', 'quantity', 'promotion_code'],
-          proration_behavior: 'create_prorations',
-          products: [
-            {
-              product: product.id,
-              prices: prices.data.map((price) => price.id)
-            }
-          ]
+          proration_behavior: 'create_prorations'
         },
         subscription_cancel: {
           enabled: true,
@@ -152,8 +137,7 @@ export async function getStripePrices() {
 
   return prices.data.map((price) => ({
     id: price.id,
-    productId:
-      typeof price.product === 'string' ? price.product : price.product.id,
+    product: typeof price.product === 'string' ? price.product : price.product.id,
     unitAmount: price.unit_amount,
     currency: price.currency,
     interval: price.recurring?.interval,
