@@ -15,8 +15,8 @@ export default async function PricingPage() {
   const basePlan = products.find((product) => product.name === 'Base');
   const plusPlan = products.find((product) => product.name === 'Plus');
 
-  const basePrice = prices.find((price) => price.product === basePlan?.id);
-  const plusPrice = prices.find((price) => price.product === plusPlan?.id);
+  const basePrice = prices.find((price) => price.productId === basePlan?.id);
+  const plusPrice = prices.find((price) => price.productId === plusPlan?.id);
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -25,7 +25,7 @@ export default async function PricingPage() {
           name={basePlan?.name || 'Base'}
           price={basePrice?.unitAmount || 800}
           interval={basePrice?.interval || 'month'}
-          trialDays={basePrice?.trialPeriodDays || 14}
+          trialDays={basePrice?.trialPeriodDays || 7}
           features={[
             'Unlimited Usage',
             'Unlimited Workspace Members',
@@ -37,7 +37,7 @@ export default async function PricingPage() {
           name={plusPlan?.name || 'Plus'}
           price={plusPrice?.unitAmount || 1200}
           interval={plusPrice?.interval || 'month'}
-          trialDays={plusPrice?.trialPeriodDays || 14}
+          trialDays={plusPrice?.trialPeriodDays || 7}
           features={[
             'Everything in Base, and:',
             'Early Access to New Features',
@@ -86,8 +86,8 @@ function PricingCard({
         ))}
       </ul>
       <form action={checkoutAction}>
-        <input type="hidden" name="priceId" value={priceId || ''} />
-        <SubmitButton disabled={!priceId} />
+        <input type="hidden" name="priceId" value={priceId} />
+        <SubmitButton />
       </form>
     </div>
   );

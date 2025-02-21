@@ -18,10 +18,6 @@ export async function createCheckoutSession({
   team: Team | null;
   priceId: string;
 }) {
-  if (!priceId) {
-    redirect('/pricing');
-  }
-
   const user = await getUser();
 
   if (!team || !user) {
@@ -51,7 +47,7 @@ export async function createCheckoutSession({
 }
 
 export async function createCustomerPortalSession(team: Team) {
-  if (!team.stripeCustomerId) {
+  if (!team.stripeCustomerId || !team.stripeProductId) {
     redirect('/pricing');
   }
 
@@ -61,6 +57,19 @@ export async function createCustomerPortalSession(team: Team) {
   if (configurations.data.length > 0) {
     configuration = configurations.data[0];
   } else {
+    const product = await stripe.products.retrieve(team.stripeProductId);
+    if (!product.active) {
+      throw new Error("Team's product is not active in Stripe");
+    }
+
+    const prices = await stripe.prices.list({
+      product: product.id,
+      active: true
+    });
+    if (prices.data.length === 0) {
+      throw new Error("No active prices found for the team's product");
+    }
+
     configuration = await stripe.billingPortal.configurations.create({
       business_profile: {
         headline: 'Manage your subscription'
@@ -69,7 +78,13 @@ export async function createCustomerPortalSession(team: Team) {
         subscription_update: {
           enabled: true,
           default_allowed_updates: ['price', 'quantity', 'promotion_code'],
-          proration_behavior: 'create_prorations'
+          proration_behavior: 'create_prorations',
+          products: [
+            {
+              product: product.id,
+              prices: prices.data.map((price) => price.id)
+            }
+          ]
         },
         subscription_cancel: {
           enabled: true,
@@ -130,15 +145,16 @@ export async function handleSubscriptionChange(
 
 export async function getStripePrices() {
   const prices = await stripe.prices.list({
+    expand: ['data.product'],
     active: true,
-    type: 'recurring',
-    expand: ['data.product']
+    type: 'recurring'
   });
 
   return prices.data.map((price) => ({
     id: price.id,
-    product: typeof price.product === 'string' ? price.product : price.product.id,
-    unitAmount: price.unit_amount || 0,
+    productId:
+      typeof price.product === 'string' ? price.product : price.product.id,
+    unitAmount: price.unit_amount,
     currency: price.currency,
     interval: price.recurring?.interval,
     trialPeriodDays: price.recurring?.trial_period_days
@@ -147,12 +163,17 @@ export async function getStripePrices() {
 
 export async function getStripeProducts() {
   const products = await stripe.products.list({
-    active: true
+    active: true,
+    expand: ['data.default_price']
   });
 
   return products.data.map((product) => ({
     id: product.id,
     name: product.name,
-    description: product.description
+    description: product.description,
+    defaultPriceId:
+      typeof product.default_price === 'string'
+        ? product.default_price
+        : product.default_price?.id
   }));
 }
